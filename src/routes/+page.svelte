@@ -63,7 +63,23 @@
 
 <div class="max-w-5xl mx-auto py-8 space-y-12">
 	{#if authState.isLoggedIn}
-		<Button class="cursor-pointer" onclick={() => authState.logout()}>Logout</Button>
+		<div class="space-y-8">
+			<Button class="cursor-pointer" onclick={() => authState.logout()}>Logout</Button>
+
+			<details open>
+				<summary class="cursor-pointer text-sm text-gray-500">Debug: Session Data</summary>
+
+				<div class="space-y-4">
+					<pre class="mt-2 overflow-auto rounded bg-gray-100 p-4 text-xs">
+						{JSON.stringify(authState.value, null, 2)}
+					</pre>
+
+					<pre class="mt-2 overflow-auto rounded bg-gray-100 p-4 text-xs">
+						{JSON.stringify(turnkeyState.value, null, 2)}
+					</pre>
+				</div>
+			</details>
+		</div>
 	{:else}
 		<GoogleOauth />
 	{/if}
