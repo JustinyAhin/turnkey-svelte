@@ -125,12 +125,6 @@ const createTurnkeyState = () => {
 		const { sessionJwt, authClient } = sessionState;
 		const currentState = state;
 
-		console.log('[updateActiveClient] Session and auth client:', {
-			hasSession: !!sessionJwt,
-			authClient,
-			sessionType: typeof sessionJwt
-		});
-
 		if (!currentState.turnkey || !authClient) {
 			console.log('[updateActiveClient] No turnkey instance or auth client');
 			updateState({ client: null });
@@ -176,13 +170,7 @@ const createTurnkeyState = () => {
 							}
 						}
 
-						console.log('[updateActiveClient] updating state with indexDbClient', {
-							client: currentState.indexDbClient,
-							sessionJwt,
-							authClient
-						});
 						updateState({ client: currentState.indexDbClient, sessionJwt, authClient });
-						console.log('[updateActiveClient] IndexedDB client activated');
 					} else {
 						console.log('[updateActiveClient] No valid session or IndexedDB client');
 						updateState({ client: null, sessionJwt, authClient });
@@ -195,11 +183,6 @@ const createTurnkeyState = () => {
 					updateState({ client: null });
 					break;
 			}
-
-			// Update session state
-			console.log('[updateActiveClient] Updating session state');
-			console.log('[updateActiveClient] session', sessionJwt);
-			console.log('[updateActiveClient] authClient', authClient);
 
 			updateState({
 				sessionJwt: sessionJwt,
@@ -230,13 +213,6 @@ const createTurnkeyState = () => {
 		const turnkeyClient = turnkeyState.value.client;
 		const turnkeySubOrgId = authState.user?.turnkeySubOrgId;
 
-		console.log('[setTurnkeySigner] setting signer', {
-			walletAdress,
-			networkKey,
-			turnkeyClient,
-			turnkeySubOrgId
-		});
-
 		if (!turnkeyClient || !turnkeySubOrgId || !walletAdress) {
 			console.error('Missing required data for signer');
 			return;
@@ -249,7 +225,6 @@ const createTurnkeyState = () => {
 			turnkeySubOrgId
 		});
 
-		console.log('[setTurnkeySigner] setting signer', signer);
 		turnkeyState.updateState({ signer });
 	};
 

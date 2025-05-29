@@ -1,5 +1,5 @@
 import { authStorage, WALLETS_KEY, USER_KEY, TOKEN_KEY } from '$lib/client/storage/auth';
-import type { AuthState, GetSelectedWalletParams, NetworkKey, TurnkeyWallet, User } from './types';
+import type { AuthState, GetSelectedWalletParams, TurnkeyWallet, User } from './types';
 import { TurnkeySigner } from '@turnkey/ethers';
 import { ethers } from 'ethers';
 import type { TurnkeyState } from '../turnkey/types';
@@ -21,7 +21,6 @@ const addUserDataToStorage = async ({
 
 type CreateConnectedTurnkeySignerParams = {
 	walletAddress: string;
-	networkKey: NetworkKey;
 	turnkeyClient: NonNullable<TurnkeyState['client']>;
 	turnkeySubOrgId: string;
 };

@@ -5,6 +5,9 @@
 	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import GoogleOauth from '$lib/components/google-oauth.svelte';
+	import { onMount } from 'svelte';
+	import { createConnectedTurnkeySigner } from '$lib/client/states/auth/utils';
+	import { sign } from 'viem/accounts';
 
 	const getIdTokenFromUrl = () => {
 		const hash = page.url.hash.split('=')[1];
@@ -53,6 +56,38 @@
 					// Clear hash even on error to prevent infinite loop
 					window.location.hash = '';
 				});
+		}
+	});
+
+	$effect(() => {
+		const turnkeyActiveClient = turnkeyState.value.client;
+		const walletAddress = authState.value.selectedWallet?.address;
+		const turnkeySubOrgId = authState.value.user?.turnkeySubOrgId;
+
+		console.log({ turnkeyActiveClient, walletAddress, turnkeySubOrgId });
+
+		if (turnkeyActiveClient && walletAddress && turnkeySubOrgId) {
+			const signer = createConnectedTurnkeySigner({
+				walletAddress,
+				turnkeyClient: turnkeyActiveClient,
+				turnkeySubOrgId
+			});
+
+			if (signer) {
+				signer.getAddress().then((address) => {
+					console.log('address', address);
+				});
+
+				const message = 'Hello, world!';
+
+				try {
+					signer.signMessage(message).then((signature) => {
+						console.log('signature', signature);
+					});
+				} catch (error) {
+					console.error('Error signing message', error);
+				}
+			}
 		}
 	});
 </script>
