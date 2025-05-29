@@ -209,7 +209,6 @@ const createTurnkeyState = () => {
 
 	const setTurnkeySigner = (authState: AuthState) => {
 		const walletAdress = authState.selectedWallet?.address;
-		const networkKey = 'sepolia';
 		const turnkeyClient = turnkeyState.value.client;
 		const turnkeySubOrgId = authState.user?.turnkeySubOrgId;
 
@@ -220,7 +219,6 @@ const createTurnkeyState = () => {
 
 		const signer = createConnectedTurnkeySigner({
 			walletAddress: walletAdress,
-			networkKey,
 			turnkeyClient,
 			turnkeySubOrgId
 		});
