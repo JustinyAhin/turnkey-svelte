@@ -43,28 +43,57 @@ export async function POST({ request }) {
 			return json({ error: 'Missing parameters' }, { status: 400 });
 		}
 
-		const subOrgsIds = await client.getSubOrgIds({
+		// Does a sub-org already exist for this Google account?
+		const existing = await client.getSubOrgIds({
 			filterType: FilterType.OidcToken,
 			filterValue: oidcToken
 		});
 
-		if (subOrgsIds?.organizationIds?.length > 0) {
-			console.error('Social login is already connected to another account', subOrgsIds);
-			throw error(400, 'Social login is already connected to another account');
+		let subOrgId: string;
+
+		if (existing?.organizationIds?.length) {
+			// Re-use the first existing sub-org ID
+			subOrgId = existing.organizationIds[0];
+		} else {
+			// Otherwise create a fresh sub-org linked to this Google account
+			const createResp = await client.createSubOrganization({
+				subOrganizationName: `suborg-${Date.now()}`,
+				rootQuorumThreshold: 1,
+				rootUsers: [
+					{
+						userName: 'Justin Ahinon',
+						userEmail: 'justiny.ahinon@gmail.com',
+						apiKeys: [],
+						authenticators: [],
+						oauthProviders: [
+							{
+								providerName: 'Google',
+								oidcToken
+							}
+						]
+					}
+				],
+			});
+
+			if (!createResp?.subOrganizationId) {
+				throw error(500, 'Failed to create sub-organization');
+			}
+
+			subOrgId = createResp.subOrganizationId;
 		}
 
-		// 2️⃣ Exchange the Google OIDC token for a Turnkey user session bound to the supplied pubkey
-		const loginResp = await client.oauthLogin({
-			oidcToken,
-			publicKey
+		// Issue / refresh the session bound to this browser key
+		const { session } = await client.oauthLogin({
+			organizationId: subOrgId,
+			publicKey,
+			oidcToken
 		});
 
-		if (!loginResp?.session) {
-			console.error('Failed to login', loginResp);
+		if (!session) {
 			throw error(400, 'Failed to login');
 		}
 
-		return json({ session: loginResp.session });
+		return json({ session });
 	} catch (err) {
 		console.error('Turnkey Google OAuth API error', err);
 		return json({ error: 'internal' }, { status: 500 });
