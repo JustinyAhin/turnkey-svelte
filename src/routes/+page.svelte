@@ -19,6 +19,9 @@
 		clearStorageItem(StorageKeys.Session);
 		clearStorageItem(StorageKeys.Client);
 
+		// remove the nonce from session storage
+		sessionStorage.removeItem('google_oauth_nonce');
+
 		turnkeyState.updateState({});
 		// option: hard reload to clear state
 		location.href = '/';
