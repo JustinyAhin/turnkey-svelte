@@ -6,10 +6,26 @@
 	import { PUBLIC_GOOGLE_OAUTH_CLIENT_ID } from '$env/static/public';
 	import { page } from '$app/state';
 
-	// reactive state
 	let loading = $state(false);
+	let hasProcessedIdToken = $state(false);
 
-	const redirect = '/';
+	const getIdTokenFromUrl = () => {
+		const hash = page.url.hash.split('=')[1];
+		if (hash) {
+			const hashParts = hash.split('&');
+			return hashParts[0];
+		}
+	};
+
+	const validateIdToken = (token: string): boolean => {
+		try {
+			const payload = JSON.parse(atob(token.split('.')[1]));
+			const storedNonce = sessionStorage.getItem('google_oauth_nonce');
+			return payload.nonce === storedNonce && payload.exp > Date.now() / 1000;
+		} catch {
+			return false;
+		}
+	};
 
 	/**
 	 * When we come back from Google the id_token is in the hash fragment.
@@ -18,58 +34,59 @@
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 
-		const hash = window.location.hash;
+		const oidcToken = getIdTokenFromUrl();
 
-		if (!hash) return;
+		if (oidcToken && !hasProcessedIdToken) {
+			if (!validateIdToken(oidcToken)) {
+				console.error('Invalid id token');
+				return;
+			}
 
-		const params = new URLSearchParams(hash.substring(1));
-		const idToken = params.get('id_token');
-
-		if (idToken) {
-			// clean up URL
-			// window.history.replaceState(
-			// 	null,
-			// 	document.title,
-			// 	window.location.pathname + window.location.search
-			// );
-			finishLogin(idToken);
+			finishLogin(oidcToken);
 		}
 	});
 
-	async function finishLogin(id_token: string) {
-		const { indexedDb } = $tk;
-		if (!indexedDb) return;
+	const finishLogin = async (oidcToken: string) => {
+		try {
+			const { indexedDb } = $tk;
+			if (!indexedDb) return;
 
-		loading = true;
+			loading = true;
 
-		await indexedDb.resetKeyPair();
-		const pubkey = await indexedDb.getPublicKey();
+			await indexedDb.resetKeyPair();
+			const publicKey = await indexedDb.getPublicKey();
 
-		console.log('pubkey', pubkey);
+			const res = await fetch('/api/turnkey/google', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ oidcToken, publicKey })
+			});
 
-		const res = await fetch('/api/turnkey/google', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ id_token, pubkey })
-		});
+			if (!res.ok) {
+				loading = false;
+				console.error('Turnkey login failed');
+				return;
+			}
 
-		if (!res.ok) {
+			const { session } = await res.json();
+
+			const { turnkey } = $tk;
+			await indexedDb.loginWithSession(session);
+
+			tk.set({ turnkey, indexedDb, session });
 			loading = false;
-			console.error('Turnkey login failed');
-			return;
+
+			hasProcessedIdToken = true;
+
+			// window.location.hash = '';
+			// goto('/');
+		} catch (error) {
+			console.error('Failed to login', error);
+			loading = false;
+
+			hasProcessedIdToken = true;
 		}
-
-		const { session } = await res.json();
-
-		const { turnkey } = $tk;
-		await indexedDb.loginWithSession(session);
-
-		tk.set({ turnkey, indexedDb, session });
-		loading = false;
-
-		// redirect back home (optional)
-		// goto('/');
-	}
+	};
 
 	const getGoogleAuthUrl = (nonce: string): string => {
 		const params = new URLSearchParams({
@@ -84,7 +101,7 @@
 		return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 	};
 
-	async function startLogin() {
+	const startLogin = async () => {
 		const { indexedDb } = $tk;
 		if (!indexedDb) return;
 
@@ -94,8 +111,10 @@
 		const nonce = bytesToHex(sha256(publicKey as string));
 		const url = getGoogleAuthUrl(nonce);
 
+		sessionStorage.setItem('google_oauth_nonce', nonce);
+
 		window.location.href = url.toString();
-	}
+	};
 </script>
 
 <button

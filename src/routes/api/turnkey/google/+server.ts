@@ -2,6 +2,7 @@ import { TURNKEY_PRIVATE_KEY, TURNKEY_PUBLIC_KEY } from '$env/static/private';
 import { PUBLIC_TURNKEY_ORG_ID } from '$env/static/public';
 import { error, json } from '@sveltejs/kit';
 import { Turnkey } from '@turnkey/sdk-server';
+import { z } from 'zod/v4-mini';
 
 enum FilterType {
 	Email = 'EMAIL',
@@ -19,20 +20,32 @@ const turnkey = new Turnkey({
 
 const client = turnkey.apiClient();
 
+const requestSchema = z.object({
+	oidcToken: z.string(),
+	publicKey: z.string()
+});
+
 export async function POST({ request }) {
 	try {
-		const { id_token: idToken, pubkey } = (await request.json()) as {
-			id_token: string | null;
-			pubkey: string | null;
-		};
+		const body = await request.json();
 
-		if (!idToken || !pubkey) {
+		const safeParsed = requestSchema.safeParse(body);
+
+		if (!safeParsed.success) {
+			console.error('Invalid request', safeParsed.error);
+			return json({ error: 'Invalid request' }, { status: 400 });
+		}
+
+		const { oidcToken, publicKey } = safeParsed.data;
+
+		if (!oidcToken || !publicKey) {
+			console.error('Missing parameters', { oidcToken, publicKey });
 			return json({ error: 'Missing parameters' }, { status: 400 });
 		}
 
 		const subOrgsIds = await client.getSubOrgIds({
 			filterType: FilterType.OidcToken,
-			filterValue: idToken
+			filterValue: oidcToken
 		});
 
 		if (subOrgsIds?.organizationIds?.length > 0) {
@@ -42,8 +55,8 @@ export async function POST({ request }) {
 
 		// 2️⃣ Exchange the Google OIDC token for a Turnkey user session bound to the supplied pubkey
 		const loginResp = await client.oauthLogin({
-			oidcToken: idToken,
-			publicKey: pubkey
+			oidcToken,
+			publicKey
 		});
 
 		if (!loginResp?.session) {
