@@ -53,7 +53,7 @@
 
 			loading = true;
 
-			await indexedDb.resetKeyPair();
+			// Use the same keypair generated before redirect to keep nonce consistent
 			const publicKey = await indexedDb.getPublicKey();
 
 			const res = await fetch('/api/turnkey/google', {
@@ -78,8 +78,8 @@
 
 			hasProcessedIdToken = true;
 
-			// window.location.hash = '';
-			// goto('/');
+			window.location.hash = '';
+			goto('/');
 		} catch (error) {
 			console.error('Failed to login', error);
 			loading = false;
