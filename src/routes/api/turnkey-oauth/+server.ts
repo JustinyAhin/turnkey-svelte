@@ -1,57 +1,37 @@
+import { TURNKEY_ORG_ID, TURNKEY_PRIVATE_KEY, TURNKEY_PUBLIC_KEY } from '$env/static/private';
 import { json } from '@sveltejs/kit';
-import { server } from '@turnkey/sdk-server';
+import { Turnkey } from '@turnkey/sdk-server';
 
-enum FilterType {
-	Email = 'EMAIL',
-	PhoneNumber = 'PHONE_NUMBER',
-	OidcToken = 'OIDC_TOKEN',
-	PublicKey = 'PUBLIC_KEY'
-}
+const turnkey = new Turnkey({
+	apiBaseUrl: 'https://api.turnkey.com',
+	apiPrivateKey: TURNKEY_PRIVATE_KEY,
+	apiPublicKey: TURNKEY_PUBLIC_KEY,
+	defaultOrganizationId: TURNKEY_ORG_ID
+});
+
+const client = turnkey.apiClient();
 
 export const POST = async ({ request }) => {
-	const { credential, token, publicKey } = (await request.json()) as {
-		credential: string | null;
-		token: string | null;
-		publicKey: string | null;
+	const { oidcToken } = (await request.json()) as {
+		oidcToken: string | null;
 	};
 
-	if (!credential || !token || !publicKey) {
-		console.error('Missing required fields');
-		return new Response('Missing required fields', { status: 400 });
+	if (!oidcToken) {
+		return new Response('Missing oidcToken', { status: 400 });
 	}
 
-	console.log({ credential, token, publicKey });
-
-	const createSuborgData: Record<string, unknown> = {
-		oauthProviders: [{ providerName: 'Google Auth - Embedded Wallet', oidcToken: token }]
-	};
-
-	const resp = await server.getOrCreateSuborg({
-		filterType: FilterType.OidcToken,
-		filterValue: credential,
-		additionalData: createSuborgData
+	const suborgs = await client.getSubOrgIds({
+		filterType: 'OIDC_TOKEN',
+		filterValue: oidcToken
 	});
 
-	const suborgIds = resp?.subOrganizationIds;
-	if (!suborgIds || suborgIds.length === 0) {
-		console.error('No suborg ids found');
-		return new Response('No suborg ids found', { status: 400 });
-	}
-
-	const suborgId = suborgIds[0];
-	const sessionResponse = await server.oauthLogin({
-		suborgID: suborgId!,
-		oidcToken: credential,
-		publicKey: publicKey,
-		sessionLengthSeconds: 60 * 60 * 24 * 7
-	});
-
-	if (!sessionResponse || !sessionResponse.session) {
-		console.error('No session response');
-		return new Response('No session response', { status: 400 });
+	if (suborgs!.organizationIds.length > 0) {
+		return new Response('Social login is already connected to another account', {
+			status: 400
+		});
 	}
 
 	return json({
-		session: sessionResponse.session
+		suborgsIds: suborgs.organizationIds
 	});
 };
