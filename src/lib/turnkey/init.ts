@@ -1,4 +1,4 @@
-import { PUBLIC_TURNKEY_ORGANIZATION_ID } from '$env/static/public';
+import { PUBLIC_TURNKEY_ORG_ID } from '$env/static/public';
 import { tk } from '$lib/stores/turnkey';
 import { Turnkey } from '@turnkey/sdk-browser';
 
@@ -21,7 +21,7 @@ export async function initTurnkey() {
 
 	const config = {
 		apiBaseUrl: 'https://api.turnkey.com',
-		defaultOrganizationId: PUBLIC_TURNKEY_ORGANIZATION_ID
+		defaultOrganizationId: PUBLIC_TURNKEY_ORG_ID
 	};
 
 	const sdk = new Turnkey(config);

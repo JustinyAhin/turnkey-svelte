@@ -1,4 +1,5 @@
-import { TURNKEY_PRIVATE_KEY, TURNKEY_PUBLIC_KEY, TURNKEY_ORG_ID } from '$env/static/private';
+import { TURNKEY_PRIVATE_KEY, TURNKEY_PUBLIC_KEY } from '$env/static/private';
+import { PUBLIC_TURNKEY_ORG_ID } from '$env/static/public';
 import { error, json } from '@sveltejs/kit';
 import { Turnkey } from '@turnkey/sdk-server';
 
@@ -13,7 +14,7 @@ const turnkey = new Turnkey({
 	apiBaseUrl: 'https://api.turnkey.com',
 	apiPrivateKey: TURNKEY_PRIVATE_KEY,
 	apiPublicKey: TURNKEY_PUBLIC_KEY,
-	defaultOrganizationId: TURNKEY_ORG_ID
+	defaultOrganizationId: PUBLIC_TURNKEY_ORG_ID
 });
 
 const client = turnkey.apiClient();
