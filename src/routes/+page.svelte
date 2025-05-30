@@ -1,7 +1,7 @@
 <script lang="ts">
 	import GoogleLogin from '$lib/components/GoogleLogin.svelte';
 	import { StorageKeys } from '@turnkey/sdk-browser';
-	import { turnkeyState } from '$lib/states/turnkey/turnkey-state.svelte';
+	import { turnkeyState } from '$lib/client/states/turnkey/turnkey-state.svelte';
 
 	const decodeJwtPayload = (token: string) => {
 		try {

@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { PUBLIC_GOOGLE_OAUTH_CLIENT_ID } from '$env/static/public';
 	import { page } from '$app/state';
-	import { turnkeyState } from '$lib/states/turnkey/turnkey-state.svelte';
+	import { turnkeyState } from '$lib/client/states/turnkey/turnkey-state.svelte';
 
 	let loading = $state(false);
 	let hasProcessedIdToken = $state(false);
