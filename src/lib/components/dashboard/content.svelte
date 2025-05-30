@@ -15,31 +15,61 @@
 	let isLoading = $state(true);
 	let user = $state<any>(null);
 	let hasInitialized = $state(false);
+	let isUserAuthenticated = $state(false);
+	let showToastError = $state(false);
 
-	// Initialize dashboard data when dependencies are ready
+	// Check if user is properly authenticated
 	$effect(() => {
-		if (turnkey.indexedDbClient && turnkey.session && !hasInitialized) {
+		if (turnkey.indexedDbClient && turnkey.session) {
+			// Check if the session has proper authentication
+			const hasValidAuth = turnkey.session.authClient || turnkey.session.token;
+			isUserAuthenticated = !!hasValidAuth;
+		} else {
+			isUserAuthenticated = false;
+		}
+	});
+
+	// Only initialize dashboard data when properly authenticated
+	$effect(() => {
+		if (isUserAuthenticated && !hasInitialized) {
 			hasInitialized = true;
 
-			// Use setTimeout to break out of reactive context
 			setTimeout(async () => {
 				try {
-					const userResponse = await turnkey.indexedDbClient?.getUser({
-						userId: turnkey.session!.authClient || ''
+					// Double-check we still have valid authentication
+					if (!turnkey.indexedDbClient || !turnkey.session?.authClient) {
+						hasInitialized = false;
+						isLoading = false;
+						return;
+					}
+
+					const userResponse = await turnkey.indexedDbClient.getUser({
+						userId: turnkey.session.authClient
 					});
-					user = userResponse?.user;
+					user = userResponse.user;
 				} catch (error) {
 					console.error('Failed to load user:', error);
-					toast.error('Failed to load user information');
-					// Reset flag to allow retry
+
+					// Only show toast for non-authentication errors
+					if (error instanceof Error && !error.message.includes('authentication failed')) {
+						if (!showToastError) {
+							showToastError = true;
+							toast.error('Failed to load user information');
+							// Reset toast flag after showing
+							setTimeout(() => {
+								showToastError = false;
+							}, 5000);
+						}
+					}
 					hasInitialized = false;
 				} finally {
 					isLoading = false;
 				}
-			}, 0);
-		} else if (!turnkey.indexedDbClient || !turnkey.session) {
-			// Reset if dependencies become unavailable
+			}, 100); // Small delay to ensure client is ready
+		} else if (!isUserAuthenticated) {
+			// Reset everything if user is not authenticated
 			hasInitialized = false;
+			user = null;
 			isLoading = true;
 		}
 	});
@@ -68,7 +98,19 @@
 	}
 </script>
 
-{#if isLoading}
+{#if !isUserAuthenticated}
+	<!-- Show login prompt when not authenticated -->
+	<div class="login-prompt">
+		<div class="login-card">
+			<h2>Welcome to Turnkey Dashboard</h2>
+			<p>Please log in to access your dashboard and manage your authentication methods.</p>
+			<div class="login-placeholder">
+				<div class="placeholder-icon">🔐</div>
+				<p>Authentication required</p>
+			</div>
+		</div>
+	</div>
+{:else if isLoading}
 	<div class="loading-container">
 		<div class="spinner-large"></div>
 		<p>Loading dashboard...</p>
@@ -136,6 +178,57 @@
 		margin: 0;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 		background-color: #f8fafc;
+	}
+
+	.login-prompt {
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: #f8fafc;
+		padding: 20px;
+	}
+
+	.login-card {
+		background: white;
+		border-radius: 12px;
+		padding: 48px;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+		border: 1px solid #e2e8f0;
+		text-align: center;
+		max-width: 400px;
+		width: 100%;
+	}
+
+	.login-card h2 {
+		font-size: 24px;
+		font-weight: 600;
+		color: #1e293b;
+		margin: 0 0 16px 0;
+	}
+
+	.login-card p {
+		color: #64748b;
+		margin: 0 0 32px 0;
+		line-height: 1.6;
+	}
+
+	.login-placeholder {
+		padding: 32px;
+		background: #f8fafc;
+		border-radius: 8px;
+		border: 2px dashed #cbd5e1;
+	}
+
+	.placeholder-icon {
+		font-size: 48px;
+		margin-bottom: 16px;
+	}
+
+	.login-placeholder p {
+		margin: 0;
+		color: #94a3b8;
+		font-weight: 500;
 	}
 
 	.dashboard-main {

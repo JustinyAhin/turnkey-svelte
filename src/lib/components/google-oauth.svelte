@@ -33,25 +33,52 @@
 	let isGoogleConnected = $state(false);
 	let userInfo = $state<any>(null);
 	let hasLoadedUserInfo = $state(false);
+	let isUserAuthenticated = $state(false);
 
-	// Load user info when session and indexedDbClient are available
+	// Check if user is properly authenticated first
 	$effect(() => {
-		if (turnkey.indexedDbClient && turnkey.session && !hasLoadedUserInfo) {
+		// Only consider authenticated if we have both indexedDbClient and a valid session
+		if (turnkey.indexedDbClient && turnkey.session) {
+			// Check if the session has proper authentication
+			const hasValidAuth = turnkey.session.authClient || turnkey.session.token;
+			isUserAuthenticated = !!hasValidAuth;
+		} else {
+			isUserAuthenticated = false;
+		}
+	});
+
+	// Only load user info when properly authenticated
+	$effect(() => {
+		if (isUserAuthenticated && !hasLoadedUserInfo) {
 			hasLoadedUserInfo = true;
 
-			// Use setTimeout to break out of the reactive context
 			setTimeout(async () => {
 				try {
-					const userResponse = await turnkey.indexedDbClient!.getUser({
-						userId: turnkey.session!.authClient || ''
+					// Double-check we still have valid authentication
+					if (!turnkey.indexedDbClient || !turnkey.session?.authClient) {
+						hasLoadedUserInfo = false;
+						return;
+					}
+
+					const userResponse = await turnkey.indexedDbClient.getUser({
+						userId: turnkey.session.authClient
 					});
 					userInfo = userResponse.user;
 				} catch (error) {
 					console.error('Failed to load user info:', error);
-					// Reset the flag on error so it can retry
+					// Don't show toast for authentication errors - user isn't logged in yet
+					if (error instanceof Error && !error.message.includes('authentication failed')) {
+						// Only show toast for non-auth errors
+						console.error('Non-auth error loading user:', error.message);
+					}
 					hasLoadedUserInfo = false;
 				}
 			}, 0);
+		} else if (!isUserAuthenticated) {
+			// Reset everything if user is not authenticated
+			hasLoadedUserInfo = false;
+			userInfo = null;
+			isGoogleConnected = false;
 		}
 	});
 
@@ -139,61 +166,86 @@
 	}
 </script>
 
-<div class="google-auth-container">
-	{#if isGoogleConnected}
-		<!-- Already connected state -->
-		<div class="login-method-row connected">
-			<div class="label-container">
-				<img src="/google.svg" alt="Google" class="icon-small" />
-				{#if showLabel}
-					<span class="method-label">Google</span>
-				{/if}
-				<span class="connection-status">Connected</span>
+<!-- Only show the component if user is authenticated -->
+{#if isUserAuthenticated}
+	<div class="google-auth-container">
+		{#if isGoogleConnected}
+			<!-- Already connected state -->
+			<div class="login-method-row connected">
+				<div class="label-container">
+					<img src="/google.svg" alt="Google" class="icon-small" />
+					{#if showLabel}
+						<span class="method-label">Google</span>
+					{/if}
+					<span class="connection-status">Connected</span>
+				</div>
+				<div class="check-icon">
+					<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+						<path
+							d="M7.5 13.475L4.025 10L2.975 11.05L7.5 15.575L17.5 5.575L16.45 4.525L7.5 13.475Z"
+							fill="#4c48ff"
+						/>
+					</svg>
+				</div>
 			</div>
-			<div class="check-icon">
-				<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-					<path
-						d="M7.5 13.475L4.025 10L2.975 11.05L7.5 15.575L17.5 5.575L16.45 4.525L7.5 13.475Z"
-						fill="#4c48ff"
-					/>
-				</svg>
+		{:else}
+			<!-- Not connected state -->
+			<div class="login-method-row">
+				<div class="label-container">
+					<img src="/google.svg" alt="Google" class="icon-small" />
+					{#if showLabel}
+						<span class="method-label">Google</span>
+					{/if}
+				</div>
+				<button
+					class="add-button"
+					onclick={handleGoogleSignIn}
+					disabled={disabled || googleAuth.isLoading}
+					title="Connect Google account"
+				>
+					{#if googleAuth.isLoading}
+						<div class="spinner"></div>
+					{:else}
+						<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+							<path
+								d="M10 4.5C10.5523 4.5 11 4.94772 11 5.5V9H14.5C15.0523 9 15.5 9.44772 15.5 10C15.5 10.5523 15.0523 11 14.5 11H11V14.5C11 15.0523 10.5523 15.5 10 15.5C9.44772 15.5 9 15.0523 9 14.5V11H5.5C4.94772 11 4.5 10.5523 4.5 10C4.5 9.44772 4.94772 9 5.5 9H9V5.5C9 4.94772 9.44772 4.5 10 4.5Z"
+								fill="currentColor"
+							/>
+						</svg>
+					{/if}
+				</button>
 			</div>
-		</div>
-	{:else}
-		<!-- Not connected state -->
+		{/if}
+
+		{#if googleAuth.error}
+			<div class="error-message">
+				{googleAuth.error}
+			</div>
+		{/if}
+	</div>
+{:else}
+	<!-- Show a placeholder when not authenticated -->
+	<div class="google-auth-container">
 		<div class="login-method-row">
 			<div class="label-container">
 				<img src="/google.svg" alt="Google" class="icon-small" />
 				{#if showLabel}
 					<span class="method-label">Google</span>
 				{/if}
+				<span class="method-status">Login required</span>
 			</div>
-			<button
-				class="add-button"
-				onclick={handleGoogleSignIn}
-				disabled={disabled || googleAuth.isLoading}
-				title="Connect Google account"
-			>
-				{#if googleAuth.isLoading}
-					<div class="spinner"></div>
-				{:else}
-					<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-						<path
-							d="M10 4.5C10.5523 4.5 11 4.94772 11 5.5V9H14.5C15.0523 9 15.5 9.44772 15.5 10C15.5 10.5523 15.0523 11 14.5 11H11V14.5C11 15.0523 10.5523 15.5 10 15.5C9.44772 15.5 9 15.0523 9 14.5V11H5.5C4.94772 11 4.5 10.5523 4.5 10C4.5 9.44772 4.94772 9 5.5 9H9V5.5C9 4.94772 9.44772 4.5 10 4.5Z"
-							fill="currentColor"
-						/>
-					</svg>
-				{/if}
-			</button>
+			<div class="disabled-icon">
+				<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+					<path
+						d="M10 4.5C10.5523 4.5 11 4.94772 11 5.5V9H14.5C15.0523 9 15.5 9.44772 15.5 10C15.5 10.5523 15.0523 11 14.5 11H11V14.5C11 15.0523 10.5523 15.5 10 15.5C9.44772 15.5 9 15.0523 9 14.5V11H5.5C4.94772 11 4.5 10.5523 4.5 10C4.5 9.44772 4.94772 9 5.5 9H9V5.5C9 4.94772 9.44772 4.5 10 4.5Z"
+						fill="currentColor"
+						opacity="0.3"
+					/>
+				</svg>
+			</div>
 		</div>
-	{/if}
-
-	{#if googleAuth.error}
-		<div class="error-message">
-			{googleAuth.error}
-		</div>
-	{/if}
-</div>
+	</div>
+{/if}
 
 <style>
 	.google-auth-container {
@@ -237,6 +289,14 @@
 		border-radius: 12px;
 	}
 
+	.method-status {
+		font-size: 12px;
+		color: #9ca3af;
+		background: #f9fafb;
+		padding: 2px 8px;
+		border-radius: 12px;
+	}
+
 	.add-button {
 		display: flex;
 		align-items: center;
@@ -261,7 +321,8 @@
 		cursor: not-allowed;
 	}
 
-	.check-icon {
+	.check-icon,
+	.disabled-icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
