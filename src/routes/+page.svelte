@@ -13,7 +13,7 @@
 		}
 	};
 
-	function logout() {
+	const logout = () => {
 		if (typeof localStorage !== 'undefined') {
 			localStorage.removeItem(StorageKeys.Session);
 			localStorage.removeItem(StorageKeys.Client);
