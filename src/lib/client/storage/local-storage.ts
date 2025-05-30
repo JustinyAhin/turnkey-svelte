@@ -25,4 +25,9 @@ const watchStorageItem = <T>(key: string, callback: (value: T | null) => void) =
 	return () => window.removeEventListener('storage', handler);
 };
 
-export { getStorageItem, watchStorageItem };
+const clearStorageItem = (key: string) => {
+	if (!browser) return;
+	localStorage.removeItem(key);
+};
+
+export { getStorageItem, watchStorageItem, clearStorageItem };

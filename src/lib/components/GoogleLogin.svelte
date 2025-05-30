@@ -5,6 +5,7 @@
 	import { PUBLIC_GOOGLE_OAUTH_CLIENT_ID } from '$env/static/public';
 	import { page } from '$app/state';
 	import { turnkeyState } from '$lib/client/states/turnkey/turnkey-state.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let loading = $state(false);
 	let hasProcessedIdToken = $state(false);
@@ -117,7 +118,7 @@
 	};
 </script>
 
-<button
+<Button
 	class="flex items-center gap-2 rounded border px-4 py-2"
 	disabled={loading}
 	onclick={startLogin}
@@ -147,4 +148,4 @@
 		</svg>
 		<span>Continue with Google</span>
 	{/if}
-</button>
+</Button>

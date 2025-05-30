@@ -2,6 +2,8 @@
 	import GoogleLogin from '$lib/components/GoogleLogin.svelte';
 	import { StorageKeys } from '@turnkey/sdk-browser';
 	import { turnkeyState } from '$lib/client/states/turnkey/turnkey-state.svelte';
+	import { clearStorageItem } from '$lib/client/storage/local-storage';
+	import { Button } from '$lib/components/ui/button';
 
 	const decodeJwtPayload = (token: string) => {
 		try {
@@ -14,10 +16,9 @@
 	};
 
 	const logout = () => {
-		if (typeof localStorage !== 'undefined') {
-			localStorage.removeItem(StorageKeys.Session);
-			localStorage.removeItem(StorageKeys.Client);
-		}
+		clearStorageItem(StorageKeys.Session);
+		clearStorageItem(StorageKeys.Client);
+
 		turnkeyState.updateState({});
 		// option: hard reload to clear state
 		location.href = '/';
@@ -38,11 +39,11 @@
 					null,
 					2
 				)}</pre>
-			<button class="mt-2 rounded border px-4 py-2" onclick={logout}>Logout</button>
+			<Button class="mt-2 rounded border px-4 py-2" onclick={logout}>Logout</Button>
 		</div>
 	{:else}
 		<p class="p-4">Logged in, but could not decode session token.</p>
-		<button class="rounded border px-4 py-2" onclick={logout}>Logout</button>
+		<Button class="rounded border px-4 py-2" onclick={logout}>Logout</Button>
 	{/if}
 {:else}
 	<div class="p-4">
