@@ -1,5 +1,5 @@
 <script lang="ts">
-	import GoogleLogin from '$lib/components/GoogleLogin.svelte';
+	import GoogleLogin from '$lib/components/sections/google-login.svelte';
 	import { StorageKeys } from '@turnkey/sdk-browser';
 	import { turnkeyState } from '$lib/client/states/turnkey/turnkey-state.svelte';
 	import { clearStorageItem } from '$lib/client/storage/local-storage';
