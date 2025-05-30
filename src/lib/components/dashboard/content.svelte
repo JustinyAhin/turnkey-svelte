@@ -1,6 +1,6 @@
 <script lang="ts">
 	import GoogleAuth from '$lib/components/google-oauth.svelte';
-	import { getTurnkeyContext } from '$lib/client/states/turnkey/turnkey-state-new.svelte';
+	import { getTurnkeyContext } from '$lib/client/states/turnkey/turnkey-state.svelte';
 	import { toast } from 'svelte-sonner';
 
 	interface Props {

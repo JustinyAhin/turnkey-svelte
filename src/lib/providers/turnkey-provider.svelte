@@ -4,7 +4,7 @@
 		setTurnkeyContext,
 		type TurnkeyProviderConfig,
 		type SessionType
-	} from '$lib/client/states/turnkey/turnkey-state-new.svelte';
+	} from '$lib/client/states/turnkey/turnkey-state.svelte';
 
 	interface Props {
 		config: TurnkeyProviderConfig;

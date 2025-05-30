@@ -1,286 +1,184 @@
-import { AuthClient, Turnkey, type TurnkeySDKBrowserConfig } from '@turnkey/sdk-browser';
-import type { TurnkeyState } from './types';
+import { getContext, setContext } from 'svelte';
 import {
-	PUBLIC_TURNKEY_ORGANIZATION_ID,
-	PUBLIC_TURNKEY_PROXY_API_BASE_URL
-} from '$env/static/public';
-import { browser } from '$app/environment';
-import { createSessionState } from './session-state.svelte';
-import { isJWTExpired } from './utils';
-import type { AuthState } from '../auth/types';
-import { createConnectedTurnkeySigner } from '../auth/utils';
+	Turnkey,
+	TurnkeyIframeClient,
+	TurnkeyIndexedDbClient,
+	TurnkeyPasskeyClient,
+	TurnkeyBrowserClient,
+	TurnkeyWalletClient,
+	AuthClient,
+	type TurnkeySDKBrowserConfig
+} from '@turnkey/sdk-browser';
+import type { WalletInterface } from '@turnkey/wallet-stamper';
 
-const DEFAULT_TURNKEY_STATE: TurnkeyState = {
-	turnkey: null,
-	authIframeClient: null,
-	indexDbClient: null,
-	client: null,
-	isInitialized: false,
-	isLoading: false,
-	error: null,
-	iframePublicKey: null,
-	sessionJwt: null,
-	authClient: null,
-	signer: null
+export interface TurnkeyClientType {
+	client: TurnkeyBrowserClient | undefined;
+	turnkey: Turnkey | undefined;
+	authIframeClient: TurnkeyIframeClient | undefined;
+	passkeyClient: TurnkeyPasskeyClient | undefined;
+	walletClient: TurnkeyWalletClient | undefined;
+	indexedDbClient: TurnkeyIndexedDbClient | undefined;
+}
+
+export type TurnkeyProviderConfig = TurnkeySDKBrowserConfig & {
+	wallet?: WalletInterface;
 };
 
-const TURNKEY_AUTH_IFRAME_CONTAINER_ID = 'turnkey-auth-iframe-container-id';
-const TURNKEY_AUTH_IFRAME_ELEMENT_ID = 'turnkey-auth-iframe-element-id';
+export interface SessionType {
+	expiry?: number;
+	token?: string;
+	authClient?: AuthClient;
+}
 
-// Configuration
-const TURNKEY_CONFIG: TurnkeySDKBrowserConfig = {
-	apiBaseUrl: 'https://api.turnkey.com',
-	defaultOrganizationId: PUBLIC_TURNKEY_ORGANIZATION_ID,
-	rpId: 'localhost',
-	serverSignUrl: `${PUBLIC_TURNKEY_PROXY_API_BASE_URL}/api/proxy/turnkey/sign`
-};
+const TURNKEY_CONTEXT_KEY = Symbol('turnkey');
 
-const createTurnkeyState = () => {
-	let state: TurnkeyState = $state({ ...DEFAULT_TURNKEY_STATE });
-	let iframeInitialized = false;
+export function createTurnkeyState(config: TurnkeyProviderConfig, session: SessionType = {}) {
+	let turnkey = $state<Turnkey | undefined>(undefined);
+	let indexedDbClient = $state<TurnkeyIndexedDbClient | undefined>(undefined);
+	let passkeyClient = $state<TurnkeyPasskeyClient | undefined>(undefined);
+	let walletClient = $state<TurnkeyWalletClient | undefined>(undefined);
+	let authIframeClient = $state<TurnkeyIframeClient | undefined>(undefined);
+	let client = $state<TurnkeyBrowserClient | undefined>(undefined);
 
-	// Create session store
-	const sessionState = createSessionState();
+	let iframeInitialized = $state(false);
+	let sessionState = $state<SessionType>(session);
 
-	const updateState = (updates: Partial<TurnkeyState>) => {
-		state = { ...state, ...updates };
-	};
+	const TurnkeyAuthIframeContainerId = 'turnkey-auth-iframe-container-id';
+	const TurnkeyAuthIframeElementId = 'turnkey-auth-iframe-element-id';
 
-	const initializeTurnkey = async () => {
-		if (!browser || iframeInitialized) {
-			console.log('[turnkeyState] Skipping initialization - not in browser or already initialized');
-			return;
+	// Initialize Turnkey clients
+	async function initializeTurnkey() {
+		if (iframeInitialized) return;
+
+		iframeInitialized = true;
+
+		// Create an instance of TurnkeyBrowserSDK
+		const turnkeyBrowserSDK = new Turnkey(config);
+		turnkey = turnkeyBrowserSDK;
+
+		// Create an instance of TurnkeyPasskeyClient
+		passkeyClient = turnkeyBrowserSDK.passkeyClient();
+
+		if (config.wallet) {
+			walletClient = turnkeyBrowserSDK.walletClient(config.wallet);
 		}
 
-		updateState({ isLoading: true, error: null });
-
+		// Create an instance of TurnkeyIframeClient
 		try {
-			const turnkeyInstance = new Turnkey(TURNKEY_CONFIG);
-			updateState({ turnkey: turnkeyInstance });
-
-			// Initialize all clients
-			await initializeIframeClient(turnkeyInstance);
-			await initializeIndexDbClient(turnkeyInstance);
-
-			iframeInitialized = true;
-			updateState({ isInitialized: true, isLoading: false });
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Failed to initialize Turnkey';
-			console.error('[turnkeyState] ❌ Initialization error:', error);
-			updateState({
-				error: errorMessage,
-				isLoading: false,
-				isInitialized: false
+			const iframeClient = await turnkeyBrowserSDK.iframeClient({
+				iframeContainer: document.getElementById(TurnkeyAuthIframeContainerId),
+				iframeUrl: config.iframeUrl || 'https://auth.turnkey.com',
+				...(config.dangerouslyOverrideIframeKeyTtl && {
+					dangerouslyOverrideIframeKeyTtl: config.dangerouslyOverrideIframeKeyTtl
+				}),
+				iframeElementId: TurnkeyAuthIframeElementId
 			});
-		}
-	};
-
-	const initializeIndexDbClient = async (turnkeyInstance: Turnkey) => {
-		if (!browser) return;
-
-		const indexDbClient = await turnkeyInstance.indexedDbClient();
-		await indexDbClient?.init();
-		updateState({ indexDbClient });
-	};
-
-	const initializeIframeClient = async (turnkeyInstance: Turnkey) => {
-		if (!browser) return;
-
-		await new Promise((resolve) => {
-			if (document.readyState === 'complete') {
-				resolve(true);
-			} else {
-				window.addEventListener('load', resolve);
-			}
-		});
-
-		let iframeContainer = document.getElementById(TURNKEY_AUTH_IFRAME_CONTAINER_ID);
-		if (!iframeContainer) {
-			iframeContainer = document.createElement('div');
-			iframeContainer.id = TURNKEY_AUTH_IFRAME_CONTAINER_ID;
-			iframeContainer.style.display = 'none';
-			document.body.appendChild(iframeContainer);
+			authIframeClient = iframeClient;
+		} catch (error) {
+			console.error('Failed to initialize iframe client:', error);
 		}
 
+		// Create an instance of TurnkeyIndexedDbClient
 		try {
-			const authIframeClient = await turnkeyInstance.iframeClient({
-				iframeContainer,
-				iframeUrl: 'https://auth.turnkey.com',
-				iframeElementId: TURNKEY_AUTH_IFRAME_ELEMENT_ID
-			});
-
-			updateState({
-				authIframeClient,
-				iframePublicKey: authIframeClient.iframePublicKey || null
-			});
-
-			console.log('[turnkeyState] Iframe client initialized');
+			const indexedDbClientInstance = await turnkeyBrowserSDK.indexedDbClient();
+			await indexedDbClientInstance?.init();
+			indexedDbClient = indexedDbClientInstance;
 		} catch (error) {
-			console.error('[turnkeyState] Failed to initialize iframe client:', error);
-			throw error;
+			console.error('Failed to initialize IndexedDB client:', error);
 		}
-	};
+	}
 
-	const updateActiveClient = async () => {
-		const { sessionJwt, authClient } = sessionState;
-		const currentState = state;
-
-		if (!currentState.turnkey || !authClient) {
-			console.log('[updateActiveClient] No turnkey instance or auth client');
-			updateState({ client: null });
-			return;
-		}
-
-		try {
-			switch (authClient) {
-				case AuthClient.Iframe:
-					console.log('[updateActiveClient] Iframe client');
-
-					if (sessionJwt && currentState.authIframeClient) {
-						try {
-							if (typeof sessionJwt === 'string' && sessionJwt.includes('.')) {
-								if (isJWTExpired(sessionJwt)) {
-									console.log('[updateActiveClient] Iframe session expired');
-									updateState({ client: null, sessionJwt, authClient });
-									break;
-								}
-							}
-
-							await currentState.authIframeClient.injectCredentialBundle(sessionJwt);
-							updateState({ client: currentState.authIframeClient, sessionJwt, authClient });
-							console.log('[updateActiveClient] Iframe client activated');
-						} catch (error) {
-							console.error('[updateActiveClient] Failed to inject credential bundle:', error);
-							updateState({ client: null, sessionJwt, authClient });
-						}
-					} else {
-						updateState({ client: null, sessionJwt, authClient });
-					}
-					break;
-
-				case AuthClient.IndexedDb:
-					console.log('[updateActiveClient] IndexedDB client');
-
-					if (sessionJwt && currentState.indexDbClient) {
-						if (typeof sessionJwt === 'string' && sessionJwt.includes('.')) {
-							if (isJWTExpired(sessionJwt)) {
-								console.log('[updateActiveClient] IndexedDB session expired');
-								updateState({ client: null, sessionJwt, authClient });
-								break;
-							}
-						}
-
-						updateState({ client: currentState.indexDbClient, sessionJwt, authClient });
-					} else {
-						console.log('[updateActiveClient] No valid session or IndexedDB client');
-						updateState({ client: null, sessionJwt, authClient });
-					}
-
-					break;
-
-				default:
-					console.log('[updateActiveClient] Default case');
-					updateState({ client: null });
-					break;
-			}
-
-			updateState({
-				sessionJwt: sessionJwt,
-				authClient: authClient
-			});
-		} catch (error) {
-			console.error('[turnkeyState] Error updating active client:', error);
-			updateState({ client: null });
-		}
-	};
-
-	const cleanup = () => {
-		const container = document.getElementById(TURNKEY_AUTH_IFRAME_CONTAINER_ID);
-		if (container) {
-			container.remove();
-		}
-	};
-
-	const reset = () => {
-		cleanup();
-		state = { ...DEFAULT_TURNKEY_STATE };
-		iframeInitialized = false;
-	};
-
-	const setTurnkeySigner = (authState: AuthState) => {
-		const walletAdress = authState.selectedWallet?.address;
-		const turnkeyClient = turnkeyState.value.client;
-		const turnkeySubOrgId = authState.user?.turnkeySubOrgId;
-
-		if (!turnkeyClient || !turnkeySubOrgId || !walletAdress) {
-			console.error('Missing required data for signer');
-			return;
-		}
-
-		const signer = createConnectedTurnkeySigner({
-			walletAddress: walletAdress,
-			turnkeyClient,
-			turnkeySubOrgId
-		});
-
-		turnkeyState.updateState({ signer });
-	};
-
-	// Auto-initialize and watch for session changes
-	$effect.root(() => {
-		$effect(() => {
-			if (browser && !state.isInitialized && !state.isLoading) {
-				initializeTurnkey();
-			}
-
-			return () => {
-				cleanup();
-			};
-		});
-
-		// Watch for session changes and update active client
-		$effect(() => {
-			if (state.isInitialized) {
-				console.log('[turnkeyState] Updating active client');
-				updateActiveClient();
-			}
-
-			return () => {
-				console.log('[turnkeyState] Cleanup');
-			};
-		});
+	// Effect to initialize Turnkey when component mounts
+	$effect(() => {
+		initializeTurnkey();
 	});
 
-	return {
-		get value() {
-			return state;
-		},
-		set value(newState: TurnkeyState) {
-			state = newState;
-		},
+	// Effect to update active client based on session
+	$effect(() => {
+		const authClientType = sessionState?.authClient;
 
-		updateState,
-		initializeTurnkey,
-		updateActiveClient,
-		reset,
-		setTurnkeySigner,
-
-		get isReady() {
-			return (
-				state.isInitialized &&
-				!state.isLoading &&
-				(!!state.authIframeClient || !!state.indexDbClient)
-			);
-		},
-
-		// Session access
-		get session() {
-			return sessionState.sessionJwt;
-		},
-		get authClient() {
-			return sessionState.authClient;
+		switch (authClientType) {
+			case AuthClient.Iframe: {
+				const expiry = sessionState?.expiry || 0;
+				if (expiry > Date.now() && sessionState?.token && authIframeClient) {
+					authIframeClient
+						.injectCredentialBundle(sessionState.token)
+						.then(() => {
+							client = authIframeClient;
+						})
+						.catch((error) => {
+							console.error('Failed to inject credential bundle:', error);
+						});
+				}
+				break;
+			}
+			case AuthClient.Passkey:
+				client = passkeyClient;
+				break;
+			case AuthClient.Wallet:
+				client = walletClient;
+				break;
+			case AuthClient.IndexedDb: {
+				const indexedDbExpiry = sessionState?.expiry || 0;
+				if (indexedDbExpiry > Date.now() && sessionState?.token) {
+					client = indexedDbClient;
+				}
+				break;
+			}
+			default:
+				// Handle unknown auth client type if needed
+				break;
 		}
-	};
-};
+	});
 
-export const turnkeyState = createTurnkeyState();
+	// Update session
+	function updateSession(newSession: SessionType) {
+		sessionState = { ...sessionState, ...newSession };
+	}
+
+	// Getters for reactive access
+	const state = {
+		get client() {
+			return client;
+		},
+		get turnkey() {
+			return turnkey;
+		},
+		get passkeyClient() {
+			return passkeyClient;
+		},
+		get authIframeClient() {
+			return authIframeClient;
+		},
+		get indexedDbClient() {
+			return indexedDbClient;
+		},
+		get walletClient() {
+			return walletClient;
+		},
+		get session() {
+			return sessionState;
+		},
+		updateSession,
+		initializeTurnkey,
+		TurnkeyAuthIframeContainerId,
+		TurnkeyAuthIframeElementId
+	};
+
+	return state;
+}
+
+export type TurnkeyState = ReturnType<typeof createTurnkeyState>;
+
+// Context helpers
+export function setTurnkeyContext(state: TurnkeyState) {
+	setContext(TURNKEY_CONTEXT_KEY, state);
+}
+
+export function getTurnkeyContext(): TurnkeyState {
+	const context = getContext<TurnkeyState>(TURNKEY_CONTEXT_KEY);
+	if (!context) {
+		throw new Error('TurnkeyContext must be used within a TurnkeyProvider');
+	}
+	return context;
+}

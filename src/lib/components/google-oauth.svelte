@@ -3,7 +3,7 @@
 		createGoogleAuthState,
 		type OidcTokenParams
 	} from '$lib/client/states/google-oauth/google-oauth-state.svelte';
-	import { getTurnkeyContext } from '$lib/client/states/turnkey/turnkey-state-new.svelte';
+	import { getTurnkeyContext } from '$lib/client/states/turnkey/turnkey-state.svelte';
 
 	interface Props {
 		clientId: string;
