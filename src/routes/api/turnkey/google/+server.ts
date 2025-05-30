@@ -25,6 +25,16 @@ const requestSchema = z.object({
 	publicKey: z.string()
 });
 
+const decodeJwt = (token: string) => {
+	try {
+		const b64 = token.split('.')[1];
+		const json = Buffer.from(b64, 'base64url').toString('utf8');
+		return JSON.parse(json);
+	} catch {
+		return {} as Record<string, unknown>;
+	}
+};
+
 export async function POST({ request }) {
 	try {
 		const body = await request.json();
@@ -56,13 +66,21 @@ export async function POST({ request }) {
 			subOrgId = existing.organizationIds[0];
 		} else {
 			// Otherwise create a fresh sub-org linked to this Google account
+			// pull user info from the Google ID-token payload
+			const { email, name } = decodeJwt(oidcToken) as { email?: string; name?: string };
+
+			if (!email) {
+				console.error('Google ID-token is missing email claim');
+				throw error(400, 'Email not present in Google token');
+			}
+
 			const createResp = await client.createSubOrganization({
 				subOrganizationName: `suborg-${Date.now()}`,
 				rootQuorumThreshold: 1,
 				rootUsers: [
 					{
-						userName: 'Justin Ahinon',
-						userEmail: 'justiny.ahinon@gmail.com',
+						userName: name ?? email,
+						userEmail: email,
 						apiKeys: [],
 						authenticators: [],
 						oauthProviders: [
@@ -72,7 +90,7 @@ export async function POST({ request }) {
 							}
 						]
 					}
-				],
+				]
 			});
 
 			if (!createResp?.subOrganizationId) {
