@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { tk } from '$lib/stores/turnkey';
 	import { sha256 } from '@noble/hashes/sha2';
 	import { bytesToHex } from '@noble/hashes/utils';
 	import { goto } from '$app/navigation';
 	import { PUBLIC_GOOGLE_OAUTH_CLIENT_ID } from '$env/static/public';
 	import { page } from '$app/state';
+	import { turnkeyState } from '$lib/states/turnkey/turnkey-state.svelte';
 
 	let loading = $state(false);
 	let hasProcessedIdToken = $state(false);
@@ -48,7 +48,7 @@
 
 	const finishLogin = async (oidcToken: string) => {
 		try {
-			const { indexedDb } = $tk;
+			const { indexedDb } = turnkeyState.value;
 			if (!indexedDb) return;
 
 			loading = true;
@@ -70,10 +70,10 @@
 
 			const { session } = await res.json();
 
-			const { turnkey } = $tk;
+			const { turnkey } = turnkeyState.value;
 			await indexedDb.loginWithSession(session);
 
-			tk.set({ turnkey, indexedDb, session });
+			turnkeyState.updateState({ turnkey, indexedDb, session });
 			loading = false;
 
 			hasProcessedIdToken = true;
@@ -102,7 +102,7 @@
 	};
 
 	const startLogin = async () => {
-		const { indexedDb } = $tk;
+		const { indexedDb } = turnkeyState.value;
 		if (!indexedDb) return;
 
 		await indexedDb.resetKeyPair();

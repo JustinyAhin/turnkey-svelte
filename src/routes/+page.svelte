@@ -1,7 +1,7 @@
 <script lang="ts">
 	import GoogleLogin from '$lib/components/GoogleLogin.svelte';
-	import { tk } from '$lib/stores/turnkey';
 	import { StorageKeys } from '@turnkey/sdk-browser';
+	import { turnkeyState } from '$lib/states/turnkey/turnkey-state.svelte';
 
 	const decodeJwtPayload = (token: string) => {
 		try {
@@ -18,16 +18,16 @@
 			localStorage.removeItem(StorageKeys.Session);
 			localStorage.removeItem(StorageKeys.Client);
 		}
-		tk.set({});
+		turnkeyState.updateState({});
 		// option: hard reload to clear state
 		location.href = '/';
 	}
 
 	// decode token whenever session changes
-	let payload = $derived($tk.session ? decodeJwtPayload($tk.session) : null);
+	let payload = $derived(turnkeyState.value.session ? decodeJwtPayload(turnkeyState.value.session) : null);
 </script>
 
-{#if $tk.session}
+{#if turnkeyState.value.session}
 	{#if payload}
 		<div class="space-y-2 p-4">
 			<p class="text-green-600">✅ Logged in!</p>

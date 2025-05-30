@@ -2,11 +2,14 @@
 	import '../app.css';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
-	import { initTurnkey } from '$lib/turnkey/init';
+	import { turnkeyState } from '$lib/states/turnkey/turnkey-state.svelte';
+
 
 	let { children } = $props();
 
-	onMount(initTurnkey);
+	onMount(async () => {
+		await turnkeyState.initTurnkey();
+	});
 </script>
 
 <Toaster richColors />
