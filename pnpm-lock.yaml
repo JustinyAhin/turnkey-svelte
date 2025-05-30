@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@turnkey/ethers':
         specifier: ^1.1.26
         version: 1.1.26(ethers@6.14.3)(typescript@5.8.3)(zod@3.22.3)
@@ -17,6 +20,9 @@ importers:
       '@turnkey/sdk-server':
         specifier: ^4.0.0
         version: 4.0.0(typescript@5.8.3)(zod@3.22.3)
+      '@turnkey/wallet-stamper':
+        specifier: ^1.0.3
+        version: 1.0.3(typescript@5.8.3)(zod@3.22.3)
       ethers:
         specifier: ^6.14.3
         version: 6.14.3
@@ -66,6 +72,9 @@ importers:
       globals:
         specifier: ^16.0.0
         version: 16.2.0
+      mode-watcher:
+        specifier: ^1.0.7
+        version: 1.0.7(svelte@5.33.9)
       prettier:
         specifier: ^3.4.2
         version: 3.5.3
@@ -81,6 +90,9 @@ importers:
       svelte-check:
         specifier: ^4.0.0
         version: 4.2.1(picomatch@4.0.2)(svelte@5.33.9)(typescript@5.8.3)
+      svelte-sonner:
+        specifier: ^1.0.3
+        version: 1.0.3(svelte@5.33.9)
       tailwind-merge:
         specifier: ^3.3.0
         version: 3.3.0
@@ -1475,6 +1487,9 @@ packages:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
     engines: {node: '>=0.8.19'}
 
+  inline-style-parser@0.2.4:
+    resolution: {integrity: sha512-0aO8FkhNZlj/ZIbNi7Lxxr12obT7cL1moPfE4tg1LkX7LlLfC6DeX4l2ZEud1ukP9jNQyNnfzQVqwbwmAATY4Q==}
+
   iron-webcrypto@1.2.1:
     resolution: {integrity: sha512-feOM6FaSr6rEABp/eDfVseKyTMDt+KGpeB35SkVn9Tyn0CqvVsY3EwI0v5i8nMHyJnzCIQf7nsy3p41TPkJZhg==}
 
@@ -1656,6 +1671,11 @@ packages:
     resolution: {integrity: sha512-+NsyUUAZDmo6YVHzL/stxSu3t9YS1iljliy3BSDrXJ/dkn1KYdmtZODGGjLcc9XLgVVpH4KshHB8XmZgMhaBXg==}
     engines: {node: '>=10'}
     hasBin: true
+
+  mode-watcher@1.0.7:
+    resolution: {integrity: sha512-ZGA7ZGdOvBJeTQkzdBOnXSgTkO6U6iIFWJoyGCTt6oHNg9XP9NBvS26De+V4W2aqI+B0yYXUskFG2VnEo3zyMQ==}
+    peerDependencies:
+      svelte: ^5.27.0
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -1893,6 +1913,21 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
+  runed@0.23.4:
+    resolution: {integrity: sha512-9q8oUiBYeXIDLWNK5DfCWlkL0EW3oGbk845VdKlPeia28l751VpfesaB/+7pI6rnbx1I6rqoZ2fZxptOJLxILA==}
+    peerDependencies:
+      svelte: ^5.7.0
+
+  runed@0.25.0:
+    resolution: {integrity: sha512-7+ma4AG9FT2sWQEA0Egf6mb7PBT2vHyuHail1ie8ropfSjvZGtEAx8YTmUjv/APCsdRRxEVvArNjALk9zFSOrg==}
+    peerDependencies:
+      svelte: ^5.7.0
+
+  runed@0.26.0:
+    resolution: {integrity: sha512-qWFv0cvLVRd8pdl/AslqzvtQyEn5KaIugEernwg9G98uJVSZcs/ygvPBvF80LA46V8pwRvSKnaVLDI3+i2wubw==}
+    peerDependencies:
+      svelte: ^5.7.0
+
   sade@1.8.1:
     resolution: {integrity: sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A==}
     engines: {node: '>=6'}
@@ -1946,6 +1981,9 @@ packages:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
 
+  style-to-object@1.0.8:
+    resolution: {integrity: sha512-xT47I/Eo0rwJmaXC4oilDGDWLohVhR6o/xAQcPQN8q6QBuZVL8qMYL85kLmST5cPjAorwvqIA4qXTRQoYHaL6g==}
+
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
@@ -1966,6 +2004,17 @@ packages:
     peerDependenciesMeta:
       svelte:
         optional: true
+
+  svelte-sonner@1.0.3:
+    resolution: {integrity: sha512-vm/+GxgOOv2mnQYH1iUtBN/pLvFmlHthpK9YqsqIUJZbq4+HT6zopHk4S/1vHKvLTyjgo9vzqA0Z+Z2sPQ/nTQ==}
+    peerDependencies:
+      svelte: ^5.0.0
+
+  svelte-toolbelt@0.7.1:
+    resolution: {integrity: sha512-HcBOcR17Vx9bjaOceUvxkY3nGmbBmCBBbuWLLEWO6jtmWH8f/QoWmbyUfQZrpDINH39en1b8mptfPQT9VKQ1xQ==}
+    engines: {node: '>=18', pnpm: '>=8.7.0'}
+    peerDependencies:
+      svelte: ^5.0.0
 
   svelte@5.33.9:
     resolution: {integrity: sha512-6K/sK3Q0qsccMTITjqW57xOMsnVtMQAVgsd1n+6iz1pPO/D+uASqRaLR0UBjcwjk9Mc1mfzD2hysf6P+v73LfQ==}
@@ -3525,6 +3574,8 @@ snapshots:
 
   imurmurhash@0.1.4: {}
 
+  inline-style-parser@0.2.4: {}
+
   iron-webcrypto@1.2.1: {}
 
   is-arrayish@0.3.2: {}
@@ -3675,6 +3726,12 @@ snapshots:
       minipass: 7.1.2
 
   mkdirp@3.0.1: {}
+
+  mode-watcher@1.0.7(svelte@5.33.9):
+    dependencies:
+      runed: 0.25.0(svelte@5.33.9)
+      svelte: 5.33.9
+      svelte-toolbelt: 0.7.1(svelte@5.33.9)
 
   mri@1.2.0: {}
 
@@ -3843,6 +3900,21 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
+  runed@0.23.4(svelte@5.33.9):
+    dependencies:
+      esm-env: 1.2.2
+      svelte: 5.33.9
+
+  runed@0.25.0(svelte@5.33.9):
+    dependencies:
+      esm-env: 1.2.2
+      svelte: 5.33.9
+
+  runed@0.26.0(svelte@5.33.9):
+    dependencies:
+      esm-env: 1.2.2
+      svelte: 5.33.9
+
   sade@1.8.1:
     dependencies:
       mri: 1.2.0
@@ -3908,6 +3980,10 @@ snapshots:
 
   strip-json-comments@3.1.1: {}
 
+  style-to-object@1.0.8:
+    dependencies:
+      inline-style-parser: 0.2.4
+
   supports-color@7.2.0:
     dependencies:
       has-flag: 4.0.0
@@ -3933,6 +4009,18 @@ snapshots:
       postcss-scss: 4.0.9(postcss@8.5.4)
       postcss-selector-parser: 7.1.0
     optionalDependencies:
+      svelte: 5.33.9
+
+  svelte-sonner@1.0.3(svelte@5.33.9):
+    dependencies:
+      runed: 0.26.0(svelte@5.33.9)
+      svelte: 5.33.9
+
+  svelte-toolbelt@0.7.1(svelte@5.33.9):
+    dependencies:
+      clsx: 2.1.1
+      runed: 0.23.4(svelte@5.33.9)
+      style-to-object: 1.0.8
       svelte: 5.33.9
 
   svelte@5.33.9:
