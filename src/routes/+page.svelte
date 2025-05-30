@@ -21,10 +21,12 @@
 		turnkeyState.updateState({});
 		// option: hard reload to clear state
 		location.href = '/';
-	}
+	};
 
 	// decode token whenever session changes
-	let payload = $derived(turnkeyState.value.session ? decodeJwtPayload(turnkeyState.value.session) : null);
+	let payload = $derived(
+		turnkeyState.value.session ? decodeJwtPayload(turnkeyState.value.session) : null
+	);
 </script>
 
 {#if turnkeyState.value.session}
