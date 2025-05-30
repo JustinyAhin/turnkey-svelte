@@ -57,10 +57,10 @@
 			// Use the same keypair generated before redirect to keep nonce consistent
 			const publicKey = await indexedDb.getPublicKey();
 
-			const res = await fetch('/api/turnkey/google', {
+			const res = await fetch('https://4900-41-90-70-116.ngrok-free.app/auth/snsLogin', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ oidcToken, publicKey })
+				body: JSON.stringify({ oidcToken, indexedDbClientPublicKey: publicKey })
 			});
 
 			if (!res.ok) {
