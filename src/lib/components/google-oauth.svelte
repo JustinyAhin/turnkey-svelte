@@ -32,33 +32,38 @@
 	// Check if Google is already connected
 	let isGoogleConnected = $state(false);
 	let userInfo = $state<any>(null);
+	let hasLoadedUserInfo = $state(false);
 
-	// Check Google connection status
+	// Load user info when session and indexedDbClient are available
 	$effect(() => {
-		if (turnkey.session && userInfo) {
-			isGoogleConnected =
-				userInfo.oauthProviders?.some((provider: { issuer: string }) =>
-					provider.issuer.toLowerCase().includes('google')
-				) || false;
+		if (turnkey.indexedDbClient && turnkey.session && !hasLoadedUserInfo) {
+			hasLoadedUserInfo = true;
+
+			// Use setTimeout to break out of the reactive context
+			setTimeout(async () => {
+				try {
+					const userResponse = await turnkey.indexedDbClient!.getUser({
+						userId: turnkey.session!.authClient || ''
+					});
+					userInfo = userResponse.user;
+				} catch (error) {
+					console.error('Failed to load user info:', error);
+					// Reset the flag on error so it can retry
+					hasLoadedUserInfo = false;
+				}
+			}, 0);
 		}
 	});
 
-	const handleLoadingUserInfo = async () => {
-		if (turnkey.indexedDbClient && turnkey.session) {
-			try {
-				const userResponse = await turnkey.indexedDbClient.getUser({
-					userId: turnkey.session.authClient || ''
-				});
-				userInfo = userResponse.user;
-			} catch (error) {
-				console.error('Failed to load user info:', error);
-			}
-		}
-	};
-
-	// Load user info when session changes
+	// Check Google connection status when userInfo changes
 	$effect(() => {
-		handleLoadingUserInfo();
+		if (userInfo && userInfo.oauthProviders) {
+			isGoogleConnected = userInfo.oauthProviders.some((provider: { issuer: string }) =>
+				provider.issuer.toLowerCase().includes('google')
+			);
+		} else {
+			isGoogleConnected = false;
+		}
 	});
 
 	async function handleGoogleSignIn() {
@@ -89,24 +94,20 @@
 			}
 
 			// Check if this Google account is already connected to another account
-			// const suborgs = await server.getSuborgs({
-			// 	filterType: 'OIDC_TOKEN',
-			// 	filterValue: result.idToken
-			// });
 			const response = await fetch('/api/turnkey-oauth', {
 				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
 				body: JSON.stringify({ oidcToken: result.idToken })
 			});
 
 			if (!response.ok) {
-				throw new Error(
-					'Failed to check if Google account is already connected to another account'
-				);
+				const errorText = await response.text();
+				throw new Error(errorText || 'Failed to check Google account status');
 			}
 
 			const suborgs = await response.json();
-
-			console.log('suborgs', suborgs);
 
 			if (suborgs && suborgs?.organizationIds?.length > 0) {
 				throw new Error('Google account is already connected to another account');
@@ -123,10 +124,8 @@
 				]
 			});
 
-			// Update user info
-			googleAuth.setUserInfo({ ...userInfo, hasGoogleAuth: true });
+			// Update connection status
 			isGoogleConnected = true;
-
 			onSuccess?.(result);
 
 			// Refresh the page to update the UI

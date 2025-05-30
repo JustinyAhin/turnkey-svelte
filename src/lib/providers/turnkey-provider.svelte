@@ -20,9 +20,9 @@
 	// Set context for child components
 	setTurnkeyContext(turnkeyState);
 
-	// Reactive update when session prop changes
+	// Reactive update when session prop changes - prevent loops
 	$effect(() => {
-		if (session) {
+		if (session && Object.keys(session).length > 0) {
 			turnkeyState.updateSession(session);
 		}
 	});
@@ -30,4 +30,8 @@
 
 {@render children?.()}
 
-<div id={turnkeyState.TurnkeyAuthIframeContainerId} style="hidden"></div>
+<!-- Hidden iframe container for Turnkey auth -->
+<div
+	id={turnkeyState.TurnkeyAuthIframeContainerId}
+	style="display: none; position: absolute; top: -9999px; left: -9999px;"
+></div>

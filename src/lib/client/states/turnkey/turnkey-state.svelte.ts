@@ -52,63 +52,90 @@ export function createTurnkeyState(config: TurnkeyProviderConfig, session: Sessi
 
 		iframeInitialized = true;
 
-		// Create an instance of TurnkeyBrowserSDK
-		const turnkeyBrowserSDK = new Turnkey(config);
-		turnkey = turnkeyBrowserSDK;
-
-		// Create an instance of TurnkeyPasskeyClient
-		passkeyClient = turnkeyBrowserSDK.passkeyClient();
-
-		if (config.wallet) {
-			walletClient = turnkeyBrowserSDK.walletClient(config.wallet);
-		}
-
-		// Create an instance of TurnkeyIframeClient
 		try {
-			const iframeClient = await turnkeyBrowserSDK.iframeClient({
-				iframeContainer: document.getElementById(TurnkeyAuthIframeContainerId),
-				iframeUrl: config.iframeUrl || 'https://auth.turnkey.com',
-				...(config.dangerouslyOverrideIframeKeyTtl && {
-					dangerouslyOverrideIframeKeyTtl: config.dangerouslyOverrideIframeKeyTtl
-				}),
-				iframeElementId: TurnkeyAuthIframeElementId
-			});
-			authIframeClient = iframeClient;
-		} catch (error) {
-			console.error('Failed to initialize iframe client:', error);
-		}
+			// Create an instance of TurnkeyBrowserSDK
+			const turnkeyBrowserSDK = new Turnkey(config);
+			turnkey = turnkeyBrowserSDK;
 
-		// Create an instance of TurnkeyIndexedDbClient
-		try {
-			const indexedDbClientInstance = await turnkeyBrowserSDK.indexedDbClient();
-			await indexedDbClientInstance?.init();
-			indexedDbClient = indexedDbClientInstance;
+			// Create an instance of TurnkeyPasskeyClient
+			passkeyClient = turnkeyBrowserSDK.passkeyClient();
+
+			if (config.wallet) {
+				walletClient = turnkeyBrowserSDK.walletClient(config.wallet);
+			}
+
+			// Create an instance of TurnkeyIframeClient
+			try {
+				const iframeClient = await turnkeyBrowserSDK.iframeClient({
+					iframeContainer: document.getElementById(TurnkeyAuthIframeContainerId),
+					iframeUrl: config.iframeUrl || 'https://auth.turnkey.com',
+					...(config.dangerouslyOverrideIframeKeyTtl && {
+						dangerouslyOverrideIframeKeyTtl: config.dangerouslyOverrideIframeKeyTtl
+					}),
+					iframeElementId: TurnkeyAuthIframeElementId
+				});
+				authIframeClient = iframeClient;
+			} catch (error) {
+				console.error('Failed to initialize iframe client:', error);
+			}
+
+			// Create an instance of TurnkeyIndexedDbClient
+			try {
+				const indexedDbClientInstance = await turnkeyBrowserSDK.indexedDbClient();
+				await indexedDbClientInstance?.init();
+				indexedDbClient = indexedDbClientInstance;
+			} catch (error) {
+				console.error('Failed to initialize IndexedDB client:', error);
+			}
 		} catch (error) {
-			console.error('Failed to initialize IndexedDB client:', error);
+			console.error('Failed to initialize Turnkey SDK:', error);
+			// Reset initialization flag to allow retry
+			iframeInitialized = false;
 		}
 	}
 
-	// Effect to initialize Turnkey when component mounts
+	// Effect to initialize Turnkey when component mounts - only run once
 	$effect(() => {
-		initializeTurnkey();
+		if (!iframeInitialized) {
+			// Use setTimeout to break out of reactive context for async operation
+			setTimeout(() => {
+				initializeTurnkey();
+			}, 0);
+		}
 	});
 
-	// Effect to update active client based on session
+	// Effect to update active client based on session - track specific dependencies
 	$effect(() => {
 		const authClientType = sessionState?.authClient;
+		const sessionToken = sessionState?.token;
+		const sessionExpiry = sessionState?.expiry;
+
+		// Only proceed if we have clients initialized
+		if (
+			!authClientType ||
+			!authIframeClient ||
+			!passkeyClient ||
+			!walletClient ||
+			!indexedDbClient
+		) {
+			return;
+		}
 
 		switch (authClientType) {
 			case AuthClient.Iframe: {
-				const expiry = sessionState?.expiry || 0;
-				if (expiry > Date.now() && sessionState?.token && authIframeClient) {
-					authIframeClient
-						.injectCredentialBundle(sessionState.token)
-						.then(() => {
-							client = authIframeClient;
-						})
-						.catch((error) => {
-							console.error('Failed to inject credential bundle:', error);
-						});
+				const expiry = sessionExpiry || 0;
+				if (expiry > Date.now() && sessionToken && authIframeClient) {
+					// Use setTimeout to prevent effect loops
+					setTimeout(() => {
+						authIframeClient
+							?.injectCredentialBundle(sessionToken)
+							.then(() => {
+								client = authIframeClient;
+							})
+							.catch((error) => {
+								console.error('Failed to inject credential bundle:', error);
+							});
+					}, 0);
 				}
 				break;
 			}
@@ -119,8 +146,8 @@ export function createTurnkeyState(config: TurnkeyProviderConfig, session: Sessi
 				client = walletClient;
 				break;
 			case AuthClient.IndexedDb: {
-				const indexedDbExpiry = sessionState?.expiry || 0;
-				if (indexedDbExpiry > Date.now() && sessionState?.token) {
+				const indexedDbExpiry = sessionExpiry || 0;
+				if (indexedDbExpiry > Date.now() && sessionToken) {
 					client = indexedDbClient;
 				}
 				break;
@@ -133,7 +160,15 @@ export function createTurnkeyState(config: TurnkeyProviderConfig, session: Sessi
 
 	// Update session
 	function updateSession(newSession: SessionType) {
-		sessionState = { ...sessionState, ...newSession };
+		// Only update if there are actual changes to prevent loops
+		const hasChanges =
+			newSession.expiry !== sessionState.expiry ||
+			newSession.token !== sessionState.token ||
+			newSession.authClient !== sessionState.authClient;
+
+		if (hasChanges) {
+			sessionState = { ...sessionState, ...newSession };
+		}
 	}
 
 	// Getters for reactive access

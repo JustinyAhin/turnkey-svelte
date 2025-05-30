@@ -14,26 +14,34 @@
 
 	let isLoading = $state(true);
 	let user = $state<any>(null);
+	let hasInitialized = $state(false);
 
-	// Initialize dashboard data
-	const initializeDashboardData = async () => {
-		if (turnkey.indexedDbClient && turnkey.session) {
-			try {
-				const userResponse = await turnkey.indexedDbClient.getUser({
-					userId: turnkey.session.authClient || ''
-				});
-				user = userResponse.user;
-			} catch (error) {
-				console.error('Failed to load user:', error);
-				toast.error('Failed to load user information');
-			} finally {
-				isLoading = false;
-			}
-		}
-	};
-
+	// Initialize dashboard data when dependencies are ready
 	$effect(() => {
-		initializeDashboardData();
+		if (turnkey.indexedDbClient && turnkey.session && !hasInitialized) {
+			hasInitialized = true;
+
+			// Use setTimeout to break out of reactive context
+			setTimeout(async () => {
+				try {
+					const userResponse = await turnkey.indexedDbClient?.getUser({
+						userId: turnkey.session!.authClient || ''
+					});
+					user = userResponse?.user;
+				} catch (error) {
+					console.error('Failed to load user:', error);
+					toast.error('Failed to load user information');
+					// Reset flag to allow retry
+					hasInitialized = false;
+				} finally {
+					isLoading = false;
+				}
+			}, 0);
+		} else if (!turnkey.indexedDbClient || !turnkey.session) {
+			// Reset if dependencies become unavailable
+			hasInitialized = false;
+			isLoading = true;
+		}
 	});
 
 	async function handleLogout() {
