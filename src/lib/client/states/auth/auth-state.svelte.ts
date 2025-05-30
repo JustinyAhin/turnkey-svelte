@@ -179,9 +179,7 @@ const createAuthState = () => {
 			if (browser && !isInitialized && turnkeyState.isReady) {
 				console.log('[authState] Auto-initializing auth state');
 
-				initializeAuth().then(() => {
-					turnkeyState.setTurnkeySigner(state);
-				});
+				initializeAuth();
 			}
 		});
 	});
