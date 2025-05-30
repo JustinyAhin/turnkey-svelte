@@ -2,7 +2,10 @@
 	import { sha256 } from '@noble/hashes/sha2';
 	import { bytesToHex } from '@noble/hashes/utils';
 	import { goto } from '$app/navigation';
-	import { PUBLIC_GOOGLE_OAUTH_CLIENT_ID } from '$env/static/public';
+	import {
+		PUBLIC_GOOGLE_OAUTH_CLIENT_ID,
+		PUBLIC_TURNKEY_PROXY_API_BASE_URL
+	} from '$env/static/public';
 	import { page } from '$app/state';
 	import { turnkeyState } from '$lib/client/states/turnkey/turnkey-state.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -57,7 +60,7 @@
 			// Use the same keypair generated before redirect to keep nonce consistent
 			const publicKey = await indexedDb.getPublicKey();
 
-			const res = await fetch('https://4900-41-90-70-116.ngrok-free.app/auth/snsLogin', {
+			const res = await fetch(`${PUBLIC_TURNKEY_PROXY_API_BASE_URL}/auth/snsLogin`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ oidcToken, indexedDbClientPublicKey: publicKey })
