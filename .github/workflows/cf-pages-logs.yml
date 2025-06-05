@@ -1,0 +1,139 @@
+name: Deploy with CF Pages Logs
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  deploy-and-logs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for CF Pages Deployment
+        id: cf-pages
+        uses: WalshyDev/cf-pages-await@v1
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          project: ${{ secrets.CF_PROJECT_NAME }}
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Fetch Deployment Logs (Always)
+        id: fetch-logs
+        if: always() && steps.cf-pages.outputs.id
+        run: |
+          echo "📋 Fetching logs for deployment: ${{ steps.cf-pages.outputs.id }}"
+          echo "🔍 Deployment Status: ${{ steps.cf-pages.outputs.success == 'true' && 'SUCCESS' || 'FAILED' }}"
+          echo ""
+
+          # Fetch deployment logs from Cloudflare API
+          LOGS_RESPONSE=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CF_ACCOUNT_ID }}/pages/projects/${{ secrets.CF_PROJECT_NAME }}/deployments/${{ steps.cf-pages.outputs.id }}/history/logs")
+
+          # Check if API call was successful
+          SUCCESS=$(echo "$LOGS_RESPONSE" | jq -r '.success')
+
+          if [ "$SUCCESS" = "true" ]; then
+            echo "✅ Successfully fetched deployment logs"
+            echo ""
+            
+            # Extract and format logs
+            echo "$LOGS_RESPONSE" | jq -r '.result.data[] | "[\(.ts)] \(.line)"' > deployment_logs.txt
+            
+            # Always display logs in GitHub Actions Summary
+            echo "## 📋 Cloudflare Pages Deployment Logs" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment ID:** \`${{ steps.cf-pages.outputs.id }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Environment:** \`${{ steps.cf-pages.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** ${{ steps.cf-pages.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ${{ steps.cf-pages.outputs.success == 'true' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Full Deployment Logs:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat deployment_logs.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            
+            # Always output to console for immediate viewing
+            echo "=== 📋 CLOUDFLARE PAGES DEPLOYMENT LOGS ==="
+            cat deployment_logs.txt
+            echo "=========================================="
+            echo ""
+            echo "✅ Logs displayed above - also available in Actions Summary and as downloadable artifact"
+            
+          else
+            echo "❌ Failed to fetch deployment logs from Cloudflare API"
+            echo "📄 API Response: $LOGS_RESPONSE"
+            echo "🔧 Error details:"
+            echo "$LOGS_RESPONSE" | jq -r '.errors[]?.message // "Unknown error"'
+            
+            # Still create summary even if log fetch failed
+            echo "## ⚠️ Could Not Fetch Deployment Logs" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment ID:** \`${{ steps.cf-pages.outputs.id }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ${{ steps.cf-pages.outputs.success == 'true' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Issue:** Failed to retrieve logs from Cloudflare API" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Display Deployment Status
+        if: always()
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.cf-pages.outputs.success }}" = "true" ]; then
+            echo "✅ **Deployment Successful**" >> $GITHUB_STEP_SUMMARY
+            echo "- **Environment:** ${{ steps.cf-pages.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **URL:** ${{ steps.cf-pages.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Alias:** ${{ steps.cf-pages.outputs.alias }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Deployment Failed**" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Logs as Artifact
+        if: always() && steps.cf-pages.outputs.id
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-pages-logs-${{ steps.cf-pages.outputs.id }}
+          path: deployment_logs.txt
+          retention-days: 30
+
+      - name: Comment on PR with Logs
+        if: always() && github.event_name == 'pull_request' && steps.cf-pages.outputs.id
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const deploymentSuccess = '${{ steps.cf-pages.outputs.success }}' === 'true';
+            const status = deploymentSuccess ? '✅ Success' : '❌ Failed';
+            const icon = deploymentSuccess ? '🚀' : '💥';
+
+            let comment = `## ${icon} Cloudflare Pages Deployment ${deploymentSuccess ? 'Completed' : 'Failed'}\n\n`;
+            comment += `**Status:** ${status}\n`;
+            comment += `**Deployment ID:** \`${{ steps.cf-pages.outputs.id }}\`\n`;
+            comment += `**Environment:** \`${{ steps.cf-pages.outputs.environment }}\`\n`;
+            comment += `**URL:** ${{ steps.cf-pages.outputs.url }}\n`;
+            comment += `**Alias:** ${{ steps.cf-pages.outputs.alias }}\n\n`;
+
+            if (fs.existsSync('deployment_logs.txt')) {
+              const logs = fs.readFileSync('deployment_logs.txt', 'utf8');
+              comment += '### 📋 Deployment Logs:\n<details><summary>Click to view logs</summary>\n\n```\n' + logs + '\n```\n</details>';
+            } else {
+              comment += '### ⚠️ Deployment Logs\nLogs could not be retrieved from Cloudflare API.';
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
