@@ -25,7 +25,7 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
-      - name: Fetch Deployment Logs (Always)
+      - name: Fetch Deployment Logs
         id: fetch-logs
         if: always() && steps.cf-pages.outputs.id
         run: |
