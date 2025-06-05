@@ -25,19 +25,93 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
+      - name: Debug CF Pages Outputs
+        if: always()
+        run: |
+          echo "CF Pages Step Conclusion: ${{ steps.cf-pages.conclusion }}"
+          echo "CF Pages Step Outcome: ${{ steps.cf-pages.outcome }}"
+          echo "Deployment ID: ${{ steps.cf-pages.outputs.id }}"
+          echo "Deployment Success: ${{ steps.cf-pages.outputs.success }}"
+          echo "Deployment Environment: ${{ steps.cf-pages.outputs.environment }}"
+          echo "Deployment URL: ${{ steps.cf-pages.outputs.url }}"
+
       - name: Fetch Deployment Logs
         id: fetch-logs
-        if: always() && steps.cf-pages.outputs.id
+        if: always() && steps.cf-pages.conclusion != 'skipped'
         run: |
-          echo "📋 Fetching logs for deployment: ${{ steps.cf-pages.outputs.id }}"
-          echo "🔍 Deployment Status: ${{ steps.cf-pages.outputs.success == 'true' && 'SUCCESS' || 'FAILED' }}"
+          DEPLOYMENT_ID="${{ steps.cf-pages.outputs.id }}"
+          ENVIRONMENT="${{ steps.cf-pages.outputs.environment }}"
+
+          # If no deployment ID from cf-pages action, try to get the latest deployment
+          if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
+            echo "🔍 No deployment ID from cf-pages action, fetching latest deployment..."
+            
+            # Try to get deployments from the current environment first
+            if [ -n "$ENVIRONMENT" ] && [ "$ENVIRONMENT" != "null" ]; then
+              echo "🎯 Looking for deployments in environment: $ENVIRONMENT"
+              DEPLOYMENTS_RESPONSE=$(curl -s \
+                -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
+                "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CF_ACCOUNT_ID }}/pages/projects/${{ secrets.CF_PROJECT_NAME }}/deployments?env=$ENVIRONMENT&per_page=1")
+            else
+              echo "🔍 Looking for latest deployment (any environment)"
+              DEPLOYMENTS_RESPONSE=$(curl -s \
+                -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
+                "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CF_ACCOUNT_ID }}/pages/projects/${{ secrets.CF_PROJECT_NAME }}/deployments?per_page=5")
+            fi
+            
+            # Check if the deployments API call was successful
+            DEPLOYMENTS_SUCCESS=$(echo "$DEPLOYMENTS_RESPONSE" | jq -r '.success')
+            
+            if [ "$DEPLOYMENTS_SUCCESS" = "true" ]; then
+              # Get the most recent deployment ID
+              LATEST_DEPLOYMENT=$(echo "$DEPLOYMENTS_RESPONSE" | jq -r '.result[0].id // empty')
+              
+              if [ -n "$LATEST_DEPLOYMENT" ]; then
+                DEPLOYMENT_ID="$LATEST_DEPLOYMENT"
+                echo "✅ Found latest deployment ID: $DEPLOYMENT_ID"
+                
+                # Also extract other info from the deployment
+                DEPLOYMENT_INFO=$(echo "$DEPLOYMENTS_RESPONSE" | jq -r '.result[0]')
+                DEPLOYMENT_ENV=$(echo "$DEPLOYMENT_INFO" | jq -r '.environment // "unknown"')
+                DEPLOYMENT_URL=$(echo "$DEPLOYMENT_INFO" | jq -r '.url // "Not available"')
+                DEPLOYMENT_STATUS=$(echo "$DEPLOYMENT_INFO" | jq -r '.latest_stage.status // "unknown"')
+                
+                echo "📊 Deployment Environment: $DEPLOYMENT_ENV"
+                echo "🌐 Deployment URL: $DEPLOYMENT_URL" 
+                echo "📈 Deployment Status: $DEPLOYMENT_STATUS"
+                
+                # Store these for use in other steps
+                echo "DEPLOYMENT_ENV=$DEPLOYMENT_ENV" >> $GITHUB_ENV
+                echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
+                echo "DEPLOYMENT_STATUS=$DEPLOYMENT_STATUS" >> $GITHUB_ENV
+              else
+                echo "❌ Could not find any deployment ID"
+                echo "📄 Deployments API Response: $DEPLOYMENTS_RESPONSE"
+                exit 0
+              fi
+            else
+              echo "❌ Failed to fetch deployments from API"
+              echo "📄 Deployments API Response: $DEPLOYMENTS_RESPONSE"
+              exit 0
+            fi
+          else
+            echo "✅ Using deployment ID from cf-pages action: $DEPLOYMENT_ID"
+            # Store original values
+            echo "DEPLOYMENT_ENV=${{ steps.cf-pages.outputs.environment }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_URL=${{ steps.cf-pages.outputs.url }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_STATUS=${{ steps.cf-pages.outputs.success == 'true' && 'success' || 'failure' }}" >> $GITHUB_ENV
+          fi
+
+          echo ""
+          echo "📋 Fetching logs for deployment: $DEPLOYMENT_ID"
+          echo "🔍 Expected Status: ${DEPLOYMENT_STATUS:-${{ steps.cf-pages.outputs.success == 'true' && 'SUCCESS' || 'FAILED/UNKNOWN' }}}"
           echo ""
 
           # Fetch deployment logs from Cloudflare API
           LOGS_RESPONSE=$(curl -s \
             -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CF_ACCOUNT_ID }}/pages/projects/${{ secrets.CF_PROJECT_NAME }}/deployments/${{ steps.cf-pages.outputs.id }}/history/logs")
+            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CF_ACCOUNT_ID }}/pages/projects/${{ secrets.CF_PROJECT_NAME }}/deployments/$DEPLOYMENT_ID/history/logs")
 
           # Check if API call was successful
           SUCCESS=$(echo "$LOGS_RESPONSE" | jq -r '.success')
@@ -49,12 +123,15 @@ jobs:
             # Extract and format logs
             echo "$LOGS_RESPONSE" | jq -r '.result.data[] | "[\(.ts)] \(.line)"' > deployment_logs.txt
             
+            # Store deployment ID for other steps
+            echo "FINAL_DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
+            
             # Always display logs in GitHub Actions Summary
             echo "## 📋 Cloudflare Pages Deployment Logs" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Deployment ID:** \`${{ steps.cf-pages.outputs.id }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "**Environment:** \`${{ steps.cf-pages.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "**URL:** ${{ steps.cf-pages.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment ID:** \`$DEPLOYMENT_ID\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Environment:** \`${DEPLOYMENT_ENV:-${{ steps.cf-pages.outputs.environment || 'Unknown' }}}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** ${DEPLOYMENT_URL:-${{ steps.cf-pages.outputs.url || 'Not available' }}}" >> $GITHUB_STEP_SUMMARY
             echo "**Status:** ${{ steps.cf-pages.outputs.success == 'true' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Full Deployment Logs:" >> $GITHUB_STEP_SUMMARY
@@ -71,14 +148,14 @@ jobs:
             
           else
             echo "❌ Failed to fetch deployment logs from Cloudflare API"
-            echo "📄 API Response: $LOGS_RESPONSE"
+            echo "📄 Logs API Response: $LOGS_RESPONSE"
             echo "🔧 Error details:"
             echo "$LOGS_RESPONSE" | jq -r '.errors[]?.message // "Unknown error"'
             
             # Still create summary even if log fetch failed
             echo "## ⚠️ Could Not Fetch Deployment Logs" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Deployment ID:** \`${{ steps.cf-pages.outputs.id }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment ID:** \`$DEPLOYMENT_ID\`" >> $GITHUB_STEP_SUMMARY
             echo "**Status:** ${{ steps.cf-pages.outputs.success == 'true' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
             echo "**Issue:** Failed to retrieve logs from Cloudflare API" >> $GITHUB_STEP_SUMMARY
           fi
@@ -100,35 +177,67 @@ jobs:
           fi
 
       - name: Upload Logs as Artifact
-        if: always() && steps.cf-pages.outputs.id
+        if: always() && env.FINAL_DEPLOYMENT_ID
         uses: actions/upload-artifact@v4
         with:
-          name: cloudflare-pages-logs-${{ steps.cf-pages.outputs.id }}
+          name: cloudflare-pages-logs-${{ env.FINAL_DEPLOYMENT_ID }}
           path: deployment_logs.txt
           retention-days: 30
 
       - name: Comment on PR with Logs
-        if: always() && github.event_name == 'pull_request' && steps.cf-pages.outputs.id
+        if: always() && github.event_name == 'pull_request' && env.FINAL_DEPLOYMENT_ID
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const deploymentSuccess = '${{ steps.cf-pages.outputs.success }}' === 'true';
-            const status = deploymentSuccess ? '✅ Success' : '❌ Failed';
-            const icon = deploymentSuccess ? '🚀' : '💥';
+            const stepConclusion = '${{ steps.cf-pages.conclusion }}';
+            const deploymentStatus = '${{ env.DEPLOYMENT_STATUS }}';
 
-            let comment = `## ${icon} Cloudflare Pages Deployment ${deploymentSuccess ? 'Completed' : 'Failed'}\n\n`;
+            // Determine status more robustly
+            let status, icon;
+            if (deploymentSuccess || deploymentStatus === 'success') {
+              status = '✅ Success';
+              icon = '🚀';
+            } else if (stepConclusion === 'failure' || deploymentStatus === 'failure') {
+              status = '❌ Failed';
+              icon = '💥';
+            } else {
+              status = '⚠️ Unknown/In Progress';
+              icon = '⏱️';
+            }
+
+            let comment = `## ${icon} Cloudflare Pages Deployment ${(deploymentSuccess || deploymentStatus === 'success') ? 'Completed' : 'Failed'}\n\n`;
             comment += `**Status:** ${status}\n`;
-            comment += `**Deployment ID:** \`${{ steps.cf-pages.outputs.id }}\`\n`;
-            comment += `**Environment:** \`${{ steps.cf-pages.outputs.environment }}\`\n`;
-            comment += `**URL:** ${{ steps.cf-pages.outputs.url }}\n`;
-            comment += `**Alias:** ${{ steps.cf-pages.outputs.alias }}\n\n`;
+            comment += `**Deployment ID:** \`${{ env.FINAL_DEPLOYMENT_ID }}\`\n`;
+            comment += `**Environment:** \`${{ env.DEPLOYMENT_ENV || 'Unknown' }}\`\n`;
+
+            const deploymentUrl = '${{ env.DEPLOYMENT_URL }}' || '${{ steps.cf-pages.outputs.url }}';
+            const deploymentAlias = '${{ steps.cf-pages.outputs.alias }}';
+
+            if (deploymentUrl && deploymentUrl !== 'Not available') {
+              comment += `**URL:** ${deploymentUrl}\n`;
+            }
+            if (deploymentAlias && deploymentAlias !== 'null') {
+              comment += `**Alias:** ${deploymentAlias}\n`;
+            }
+            comment += '\n';
 
             if (fs.existsSync('deployment_logs.txt')) {
               const logs = fs.readFileSync('deployment_logs.txt', 'utf8');
               comment += '### 📋 Deployment Logs:\n<details><summary>Click to view logs</summary>\n\n```\n' + logs + '\n```\n</details>';
             } else {
               comment += '### ⚠️ Deployment Logs\nLogs could not be retrieved from Cloudflare API.';
+            }
+
+            // Add debugging info for failed deployments
+            if (!deploymentSuccess && deploymentStatus !== 'success') {
+              comment += '\n\n### 🔧 Debugging Info:\n';
+              comment += `- **CF Pages Action Conclusion:** \`${stepConclusion}\`\n`;
+              comment += `- **CF Pages Action Outcome:** \`${{ steps.cf-pages.outcome }}\`\n`;
+              comment += `- **Deployment Status from API:** \`${deploymentStatus}\`\n`;
+              comment += '- **Common causes:** Missing environment variables, build errors, syntax issues, dependency problems\n';
+              comment += '- **Next steps:** Check the logs above for specific error messages\n';
             }
 
             github.rest.issues.createComment({
